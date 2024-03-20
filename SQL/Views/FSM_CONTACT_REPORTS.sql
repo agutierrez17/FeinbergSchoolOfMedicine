@@ -3,6 +3,10 @@ CREATE OR REPLACE VIEW RPT_RVA7647.FSM_CONTACT_REPORTS AS
 SELECT
 C.ID_NUMBER,
 C.CONTACT_DATE,
+CASE WHEN EXTRACT(MONTH FROM C.CONTACT_DATE) >= 9
+THEN EXTRACT(YEAR FROM C.CONTACT_DATE)+1
+ELSE EXTRACT(YEAR FROM C.CONTACT_DATE)
+END AS "Fiscal Year",
 C.CONTACT_TYPE,
 TMS_CTYPE.short_desc AS "CONTACT_TYPE_DESC",
 C.CONTACT_PURPOSE_CODE,
@@ -12,9 +16,9 @@ e.report_name As Contacter,
 C.DESCRIPTION,
 ROW_NUMBER() OVER (PARTITION BY C.ID_NUMBER ORDER BY C.CONTACT_DATE DESC) AS Rw
 FROM CONTACT_REPORT C
+INNER JOIN FSM_DAR_STAFF ON C.AUTHOR_ID_NUMBER = FSM_DAR_STAFF.ID_NUMBER
 Inner Join contact_rpt_credit CR On CR.report_id = c.report_id
 INNER JOIN ENTITY E ON CR.ID_NUMBER = E.ID_NUMBER
 Inner Join tms_contact_rpt_purpose tms_cpurp On tms_cpurp.contact_purpose_code = c.contact_purpose_code
 Inner Join tms_contact_rpt_type tms_ctype On tms_ctype.contact_type = c.contact_type
-
 ;
