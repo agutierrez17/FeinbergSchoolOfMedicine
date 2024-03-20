@@ -1,0 +1,64 @@
+WITH SENDS AS (
+SELECT DISTINCT
+"id" AS FSM_ID,
+substr('00000000000'|| "constituentId",-10) AS ID_NUMBER,
+CASE  
+WHEN "messageID" IN ('211658779','211658780') THEN '3203002224201GFT' -- FY24 Rheum Email 1
+WHEN "messageID" IN ('211674337','211685139','211685140') THEN '3203006286901GFT' --- DGP Student Relief Emergency Fund
+WHEN "messageID" IN ('211684256','211684259') THEN '3203000886101GFT' -- Opthalmology
+ELSE '' END AS "Appeal Code",
+  
+CASE 
+  WHEN "messageID" IN ('211658779') THEN 'FY24 FSM Rheumatology Appeal 1st Email Solicitation'
+  WHEN "messageID" IN ('211658780') THEN 'FY24 FSM Rheumatology Appeal 2nd Email Solicitation'
+  WHEN "messageID" IN ('211674337') THEN 'FY24 FSM DGP Fall Appeal 1st Email Solicitation'
+  WHEN "messageID" IN ('211685139') THEN 'FY24 FSM DGP Fall Appeal 2nd Email Solicitation'
+  WHEN "messageID" IN ('211685140') THEN 'FY24 FSM DGP Fall Appeal 3rd Email Solicitation'
+  WHEN "messageID" IN ('211684256') THEN 'FY24 FSM Opthalmology Fall Appeal 1st Email Solicitation'
+  WHEN "messageID" IN ('211684259') THEN 'FY24 FSM Opthalmology Fall Appeal 2nd Email Solicitation'
+ELSE '' END AS "Appeal Description",
+  
+CASE WHEN "messageID" IN ('211684256','211684259') THEN 'Neuroscience' ELSE 'Cancer Team' END AS "Appeal Category",
+  
+'Email' AS "Appeal Type",
+CASE 
+  WHEN "messageID" IN ('211658779','211658780') THEN '11/14/2023'
+  WHEN "messageID" IN ('211674337','211685139','211685140') THEN '11/14/2023'
+  WHEN "messageID" IN ('211684256') THEN '11/14/2023'
+  WHEN "messageID" IN ('211684259') THEN '12/20/2023'
+ELSE '' END AS "Appeal Date",
+'2024' AS "Fiscal Year",
+AL.ALLOCATION_SID AS APPEAL_SID
+  
+FROM FSM_ENCOMPASS_RECIPIENTS E
+INNER JOIN DM_ARD.DIM_ALLOCATION@catrackstobi AL ON AL.ALLOCATION_CODE = 
+CASE 
+  WHEN "messageID" IN ('211674337','211685139','211685140') THEN '3203006286901GFT' -- DGP
+  WHEN "messageID" IN ('211684256','211684259') THEN '3203000886101GFT' -- OPTHALMOLOGY
+  WHEN "messageID" IN ('211658779','211658780') THEN '3203002224201GFT' -- RHEUMATOLOGY
+ELSE '' END
+)
+
+-----MAIL APPEALS
+SELECT DISTINCT
+A."Appeal Code",
+A."Appeal Description",
+A."Appeal Category",
+A.APPEAL_SID,
+A."Appeal Date",
+A."Appeal Type",
+G.ENTITY_ID_NUMBER,
+G.TRANS_ID_NUMBER,
+G.DATE_OF_RECORD_KEY AS "Gift Date",
+G.NEW_GIFTS_AND_CMIT_AMT AS "Gift Amount",
+A."Fiscal Year"
+FROM DM_ARD.FACT_GIVING_TRANS@catrackstobi G
+--INNER JOIN CURRENT_FY ON G.YEAR_OF_GIVING = CURRENT_FY.CFY
+INNER JOIN SENDS A ON A.APPEAL_SID =
+CASE 
+  WHEN LENGTH(A."Appeal Code") > 5 THEN G.ALLOCATION_SID ELSE G.APPEAL_SID END AND 
+  A."Appeal Type" = CASE WHEN A."Appeal Code" IN ('NFBGD','PFDGD') THEN 'Mail' ELSE A."Appeal Type" END 
+    --AND TO_DATE(G.DATE_OF_RECORD_KEY,'YYYYMMDD') >= CASE WHEN A."Appeal Code" LIKE '%[0-9]%' THEN TO_DATE(A."Appeal Date",'YYYYMMDD') ELSE TO_DATE(G.DATE_OF_RECORD_KEY,'YYYYMMDD') END 
+
+WHERE
+G.NEW_GIFTS_AND_CMIT_AMT > 0
