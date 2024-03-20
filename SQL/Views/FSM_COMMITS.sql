@@ -1,15 +1,17 @@
 CREATE OR REPLACE VIEW RPT_RVA7647.FSM_COMMITS AS
 
--- Outright giftS
+-- Outright gifts
 SELECT DISTINCT
 gft.id_number AS "ID Number",
 tx_number AS "Transaction Number",
 tx_sequence AS "Sequence",
 gft.transaction_type AS "Gift Type Code",
 t.short_desc AS "Gift Type Desc", 
+gft.ASSOCIATED_CODE AS "Associated Code",
 date_of_record AS "Gift Date",
 fiscal_year AS "Fiscal Year",
-credit_amount AS "Gift Amount",
+legal_amount AS "Gift Amount",
+credit_amount AS "Credit Amount",
 gft.allocation_code AS "Allocation Code",
 gft.alloc_short_name AS "Alloc Short Name",
 al.long_name AS "Alloc Long Name",
@@ -31,7 +33,8 @@ fa.ZIP,
 fa."Country",
 fp."Phone" as "Phone Number",
 fe."Email",
-case when e.death_dt > '00000000' then 'Y' else 'N' END AS "Deceased"
+case when e.death_dt > '00000000' then 'Y' else 'N' END AS "Deceased",
+fsm_lifetime_giving(e.ID_NUMBER) AS "FSM Lifetime Giving"
 From nu_gft_trp_gifttrans gft
 Left Join tms_transaction_type t On t.transaction_type_code = gft.transaction_type
 Left Join tms_payment_type p On p.payment_type_code = gft.payment_type
@@ -46,8 +49,8 @@ Where
 tx_gypm_ind = 'G' 
 AND
 gft.alloc_school = 'FS' 
-AND
-gft.ASSOCIATED_CODE = 'P'
+--AND
+--gft.ASSOCIATED_CODE = 'P'
 
 Union All 
 
@@ -58,9 +61,11 @@ match_gift_receipt_number AS "Transaction Number",
 match_gift_matched_sequence AS "Sequence",
 'M' AS "Gift Type Code",
 'Matching Gift' AS "Gift Type Desc",
+'P' AS "Associated Code",
 match_gift_date_of_record AS "Gift Date",
 match_gift_year_of_giving AS "Fiscal Year",
-match_gift_amount AS "Gift Amount",
+match_gift_amount AS "Legal Amount",
+match_gift_amount AS "Credit Amount",
 match_gift_allocation_name AS "Allocation Code",
 al.short_name as "Alloc Short Name", 
 al.long_name as "Alloc Long Name",
@@ -82,7 +87,8 @@ fa.ZIP,
 fa."Country",
 fp."Phone" as "Phone Number",
 fe."Email",
-case when e.death_dt > '00000000' then 'Y' else 'N' END AS "Deceased"
+case when e.death_dt > '00000000' then 'Y' else 'N' END AS "Deceased",
+fsm_lifetime_giving(e.ID_NUMBER) AS "FSM Lifetime Giving"
 From matching_gift mg
 Inner Join (Select id_number, tx_number, restrict_code, restriction_desc From nu_gft_trp_gifttrans where ASSOCIATED_CODE = 'P') gft On mg.match_gift_matched_receipt = gft.tx_number
 Left Join tms_payment_type p On p.payment_type_code = mg.match_payment_type
@@ -105,9 +111,11 @@ pledge_pledge_number AS "Transaction Number",
 p.pledge_sequence AS "Sequence",
 p.pledge_pledge_type AS "Gift Type",
 pt.short_desc AS "Gift Type Desc",
+pledge_associated_code AS "Associated Code",
 pledge_date_of_record AS "Gift Date",
 pledge_year_of_giving AS "Fiscal Year",
-p.pledge_amount AS "Gift Amount",
+p.pledge_amount AS "Legal Amount",
+PLEDGE_ASSOCIATED_CREDIT_AMT AS "Credit Amount",
 p.pledge_allocation_name AS "Allocation Code",
 al.short_name as "Allocation Short Name", 
 al.long_name as "Allocation Long Name", 
@@ -129,7 +137,8 @@ fa.ZIP,
 fa."Country",
 fp."Phone" as "Phone Number",
 fe."Email",
-case when e.death_dt > '00000000' then 'Y' else 'N' END AS "Deceased"
+case when e.death_dt > '00000000' then 'Y' else 'N' END AS "Deceased",
+fsm_lifetime_giving(e.ID_NUMBER) AS "FSM Lifetime Giving"
 From pledge p
 left join tms_pledge_type pt On pt.pledge_type_code = p.pledge_pledge_type
 left join ADVANCE.ALLOCATION al on al.allocation_code = p.pledge_allocation_name
@@ -141,6 +150,6 @@ left join fsm_emails fe on e.id_number = fe."ID Number" and fe.rw = 1
 left join fsm_addresses fa on e.id_number = fa."ID Number" and fa.rw = 1
 WHERE
 pledge_alloc_school = 'FS' 
-AND
-pledge_associated_code = 'P'
+--AND
+--pledge_associated_code = 'P'
 ;
