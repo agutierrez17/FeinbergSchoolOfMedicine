@@ -1,40 +1,8 @@
-CREATE OR REPLACE VIEW RPT_RVA7647.FSM_EVENT_CONSTITUENTS AS
-
-WITH q as (
-SELECT DISTINCT
-F."ID Number",
-Q.CONTACT_DATE AS "Qualification Date",
-Q.Contacter AS "Qualified By"
-FROM FSM_EVENTS F
-INNER JOIN FSM_CONTACT_REPORTS Q ON F."ID Number" = Q.ID_NUMBER AND F."Attendee Type" = 'Participant' AND Q.AUTHOR_ID_NUMBER NOT IN ('0000766311')
-WHERE
-Q.RwQ = 1
-),
-
-v as (
-SELECT DISTINCT
-F."ID Number",
-V.CONTACT_DATE AS "Visit Date",
-V.Contacter AS "Visited By"
-FROM FSM_EVENTS F
-INNER JOIN FSM_CONTACT_REPORTS V ON F."ID Number" = V.ID_NUMBER AND F."Attendee Type" = 'Participant' AND V.AUTHOR_ID_NUMBER NOT IN ('0000766311')
-WHERE
-V.RwV = 1
-),
-
-s as (
-SELECT DISTINCT
-F."ID Number",
-S.CONTACT_DATE AS "Solicit Date",
-S.Contacter AS "Solicited By"
-FROM FSM_EVENTS F
-INNER JOIN FSM_CONTACT_REPORTS S ON F."ID Number" = S.ID_NUMBER AND F."Attendee Type" = 'Participant' AND S.AUTHOR_ID_NUMBER NOT IN ('0000766311')
-WHERE
-S.RwS = 1
-)
+CREATE OR REPLACE VIEW RPT_RVA7647.FSM_PIPELINE_CONSTITUENTS AS
 
 SELECT
-E.ID_NUMBER,
+I.OTHER_ID AS "Pipeline ID",
+E.ID_NUMBER AS "CATracks ID",
 E.REPORT_NAME as "Prospect Name",
 E.LAST_NAME AS "Last Name",
 E.FIRST_NAME AS "First Name",
@@ -106,36 +74,12 @@ CT.DESCRIPTION AS "Most Recent Contact Descr",
 CT.CONTACT_PURPOSE_DESC AS "Most Recent Contact Purpose",
 CT.CONTACTER AS "Most Recent Contacter",
 
------ EVENT INFO
-F."Event ID",
-F."Event Name",
-F."Fiscal Year",
-F."Event Venue",
-F."Event State",
-F."Event Note",
-F."Active",
-F."Event Status",
-F."Event Type",
-TO_DATE(F."Event Start Date") AS "Event Date",
+----- SPECIAL HANDLING
+CASE WHEN E.ID_NUMBER IN (SELECT H.ID_NUMBER FROM HANDLING H WHERE H.HND_TYPE_CODE = 'NC' AND h.hnd_status_code = 'A') THEN 'Y' ELSE 'N' END AS "No Contact",
+CASE WHEN E.ID_NUMBER IN (SELECT H.ID_NUMBER FROM HANDLING H WHERE H.HND_TYPE_CODE = 'DNS' AND h.hnd_status_code = 'A') THEN 'Y' ELSE 'N' END AS "No Solicit"
 
------ ATTENDEE INFO
-F."Attendee Type",
---F."Attendee Status Code",
---F."Attendee Status Desc",
-
----- EVENT FOLLOW UP
-CASE WHEN Q."ID Number" IS NOT NULL THEN 'Y' ELSE 'N' END AS "Qualified Post Event",
-Q."Qualification Date",
-Q."Qualified By",
-CASE WHEN V."ID Number" IS NOT NULL THEN 'Y' ELSE 'N' END AS "Visit Post Event",
-V."Visit Date",
-V."Visited By",
-CASE WHEN S."ID Number" IS NOT NULL THEN 'Y' ELSE 'N' END AS "Solicit Post Event",
-S."Solicit Date",
-S."Solicited By"
-
-FROM FSM_EVENTS F
-INNER JOIN ENTITY E ON F."ID Number" = E.ID_NUMBER
+FROM IDS_BASE I
+INNER JOIN ENTITY E ON E.ID_NUMBER = I.ID_NUMBER AND I.IDS_TYPE_CODE = 'FPI'
 LEFT OUTER JOIN FSM_ADDRESSES ADR ON E.ID_NUMBER = ADR."ID Number" AND ADR.Rw = 1
 LEFT OUTER JOIN FSM_PHONES PH ON E.ID_NUMBER = PH."ID Number" AND PH.Rw = 1
 LEFT OUTER JOIN FSM_EMAILS eM ON E.ID_NUMBER = EM."ID Number" AND EM.Rw = 1
@@ -143,7 +87,7 @@ LEFT OUTER JOIN FSM_EMAILS eM ON E.ID_NUMBER = EM."ID Number" AND EM.Rw = 1
 LEFT OUTER JOIN PROSPECT_ENTITY PE ON E.ID_NUMBER = PE.ID_NUMBER
 LEFT OUTER JOIN PROSPECT P ON PE.PROSPECT_ID = P.PROSPECT_ID
 LEFT OUTER JOIN ASSIGNMENT A ON A.PROSPECT_ID = P.PROSPECT_ID AND A.ACTIVE_IND = 'Y' AND A.ASSIGNMENT_TYPE = 'PM'
-LEFT OUTER JOIN ENTITY MGR ON A.ASSIGNMENT_ID = MGR.ID_NUMBER
+LEFT OUTER JOIN ENTITY MGR ON A.ASSIGNMENT_ID_NUMBER = MGR.ID_NUMBER
 ----- SPOUSE PROSPECT AND ASSIGNMENT INFO
 LEFT OUTER JOIN PROSPECT_ENTITY PE_SPS ON E.SPOUSE_ID_NUMBER = PE.ID_NUMBER
 LEFT OUTER JOIN PROSPECT P_SPS ON PE_SPS.PROSPECT_ID = P_SPS.PROSPECT_ID
@@ -171,16 +115,8 @@ LEFT OUTER JOIN TMS_RATING RATING ON EV.RATING_CODE = RATING.rating_code
 ----- MOST RECENT CONTACT INFO
 LEFT OUTER JOIN FSM_CONTACT_REPORTS CT ON E.ID_NUMBER = CT.ID_NUMBER AND CT.RW = 1
 
------ QUALIFICATION
-LEFT OUTER JOIN q ON E.ID_NUMBER = q."ID Number" AND q."Qualification Date" >= F."Event Start Date" AND q."Qualification Date" < add_months(F."Event Start Date",12)
-
------ VISIT
-LEFT OUTER JOIN v ON E.ID_NUMBER = v."ID Number" AND v."Visit Date" >= F."Event Start Date" AND v."Visit Date" < add_months(F."Event Start Date",12)
-
------ SOLICITATION
-LEFT OUTER JOIN s ON E.ID_NUMBER = s."ID Number" AND s."Solicit Date" >= F."Event Start Date" AND s."Solicit Date" < add_months(F."Event Start Date",24)
-
 GROUP BY
+I.OTHER_ID,
 E.ID_NUMBER,
 E.REPORT_NAME,
 E.LAST_NAME,
@@ -234,29 +170,4 @@ CT.CONTACT_DATE,
 CT.CONTACT_TYPE_DESC,
 CT.DESCRIPTION,
 CT.CONTACT_PURPOSE_DESC,
-CT.CONTACTER,
-
-F."Event ID",
-F."Event Name",
-F."Fiscal Year",
-F."Event Venue",
-F."Event State",
-F."Event Note",
-F."Active",
-F."Event Status",
-F."Event Type",
-F."Event Start Date",
-
-F."Attendee Type",
-F."Attendee Status Code",
-F."Attendee Status Desc",
-
-Q."ID Number",
-Q."Qualification Date",
-Q."Qualified By",
-V."ID Number",
-V."Visit Date",
-V."Visited By",
-S."ID Number",
-S."Solicit Date",
-S."Solicited By";
+CT.CONTACTER;

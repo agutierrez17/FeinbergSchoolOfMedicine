@@ -1,37 +1,4 @@
-CREATE OR REPLACE VIEW RPT_RVA7647.FSM_EVENT_CONSTITUENTS AS
-
-WITH q as (
-SELECT DISTINCT
-F."ID Number",
-Q.CONTACT_DATE AS "Qualification Date",
-Q.Contacter AS "Qualified By"
-FROM FSM_EVENTS F
-INNER JOIN FSM_CONTACT_REPORTS Q ON F."ID Number" = Q.ID_NUMBER AND F."Attendee Type" = 'Participant' AND Q.AUTHOR_ID_NUMBER NOT IN ('0000766311')
-WHERE
-Q.RwQ = 1
-),
-
-v as (
-SELECT DISTINCT
-F."ID Number",
-V.CONTACT_DATE AS "Visit Date",
-V.Contacter AS "Visited By"
-FROM FSM_EVENTS F
-INNER JOIN FSM_CONTACT_REPORTS V ON F."ID Number" = V.ID_NUMBER AND F."Attendee Type" = 'Participant' AND V.AUTHOR_ID_NUMBER NOT IN ('0000766311')
-WHERE
-V.RwV = 1
-),
-
-s as (
-SELECT DISTINCT
-F."ID Number",
-S.CONTACT_DATE AS "Solicit Date",
-S.Contacter AS "Solicited By"
-FROM FSM_EVENTS F
-INNER JOIN FSM_CONTACT_REPORTS S ON F."ID Number" = S.ID_NUMBER AND F."Attendee Type" = 'Participant' AND S.AUTHOR_ID_NUMBER NOT IN ('0000766311')
-WHERE
-S.RwS = 1
-)
+CREATE OR REPLACE VIEW FSM_ALUMNI AS
 
 SELECT
 E.ID_NUMBER,
@@ -57,8 +24,17 @@ CASE WHEN E.BIRTH_DT NOT LIKE '%00%' THEN TRUNC((SYSDATE - TO_DATE(E.BIRTH_DT, '
 CASE WHEN E.DEATH_DT = '00000000' THEN 'N' ELSE 'Y' END AS "Deceased",
 
 ----- RATINGS
-MAX(RATING.SHORT_DESC) AS "Wealth Rating",
 rpt_rva7647.fsm_lifetime_giving(E.ID_NUMBER) AS "FSM Lifetime Giving",
+
+----- ADDITIONAL CONSTITUENT INFO
+FDS.LIFETIME_GIFT_CREDIT_AMOUNT AS "Lifetime Giving",
+--FDSF.LIFETIME_GIFT_CREDIT_AMOUNT AS "FSM Lifetime Giving",
+MAX(RATING.SHORT_DESC) AS "Wealth Rating",
+EN.MAJOR_GIFT_PR_TIER AS "Major Gift Tier",
+EN.AFFINITY_SCORE AS "Affinity Score",
+NVL(SHS.DO_NOT_SOLICIT_FLAG,'N') AS "Do Not Solicit",
+NVL(SHS.DO_NOT_MAIL_FLAG,'N') AS "Do Not Mail",
+NVL(SHS.DO_NOT_EMAIL_FLAG,'N') AS "Do Not Email",
 
 ----- MOST RECENT GIFT INFORMATION
 G."Gift Date" AS "Most Recent Gift Date",
@@ -71,7 +47,6 @@ MAX(MGR_SPS.REPORT_NAME) AS "Spouse Manager Name",
 E.SPOUSE_ID_NUMBER AS "Spouse ID Number",
 
 ----- FEINBERG ALUM INFO
-CASE WHEN D.ID_NUMBER IS NOT NULL THEN 'Y' ELSE 'N' END AS "Feinberg Alum",
 FSMDEGREESLIST(E.ID_NUMBER) AS "FSM Degrees List",
 COUNT(DISTINCT D.DEGREE_YEAR) AS "Number of Feinberg Degrees",
 
@@ -106,36 +81,87 @@ CT.DESCRIPTION AS "Most Recent Contact Descr",
 CT.CONTACT_PURPOSE_DESC AS "Most Recent Contact Purpose",
 CT.CONTACTER AS "Most Recent Contacter",
 
------ EVENT INFO
-F."Event ID",
-F."Event Name",
-F."Fiscal Year",
-F."Event Venue",
-F."Event State",
-F."Event Note",
-F."Active",
-F."Event Status",
-F."Event Type",
-TO_DATE(F."Event Start Date") AS "Event Date",
+----- CONSTITUENT GROUPS
+CASE WHEN E.ID_NUMBER IN (
+SELECT DISTINCT
+ID_NUMBER
+FROM ADVANCE.AFFILIATION
+WHERE
+AFFIL_LEVEL_CODE = 'CC'
+) THEN 'Y' ELSE 'N' END AS "Clinic Client Code",
 
------ ATTENDEE INFO
-F."Attendee Type",
---F."Attendee Status Code",
---F."Attendee Status Desc",
+CASE WHEN E.ID_NUMBER IN (
+---- FEINBERG AFFILIATION
+SELECT DISTINCT
+ID_NUMBER
+FROM ADVANCE.AFFILIATION
+WHERE
+AFFIL_CODE = 'FS'
+) THEN 'Y' ELSE 'N' END AS "Feinberg Affiliation",
 
----- EVENT FOLLOW UP
-CASE WHEN Q."ID Number" IS NOT NULL THEN 'Y' ELSE 'N' END AS "Qualified Post Event",
-Q."Qualification Date",
-Q."Qualified By",
-CASE WHEN V."ID Number" IS NOT NULL THEN 'Y' ELSE 'N' END AS "Visit Post Event",
-V."Visit Date",
-V."Visited By",
-CASE WHEN S."ID Number" IS NOT NULL THEN 'Y' ELSE 'N' END AS "Solicit Post Event",
-S."Solicit Date",
-S."Solicited By"
 
-FROM FSM_EVENTS F
-INNER JOIN ENTITY E ON F."ID Number" = E.ID_NUMBER
+CASE WHEN E.ID_NUMBER IN (
+----- "FEINBERG TEAM" PROSPECT
+SELECT DISTINCT
+PE.ID_NUMBER
+FROM PROSPECT_ENTITY PE
+INNER JOIN PROSPECT P ON PE.PROSPECT_ID = P.PROSPECT_ID AND P.PROSPECT_TEAM_CODE = 'FS'
+) THEN 'Y' ELSE 'N' END AS "'Feinberg Team' Prospect",
+
+
+CASE WHEN E.ID_NUMBER IN (
+------ FEINBERG DEGREES
+SELECT DISTINCT
+D.ID_NUMBER
+FROM DEGREES D
+WHERE
+D.SCHOOL_CODE = 'MED'
+) THEN 'Y' ELSE 'N' END AS "Feinberg Alum",
+
+
+CASE WHEN E.ID_NUMBER IN (
+----- FEINBERG GIFTS
+SELECT DISTINCT
+GFT.ID_NUMBER
+From nu_gft_trp_gifttrans gft
+WHERE
+gft.alloc_school = 'FS'
+
+UNION
+
+----- FEINBERG MATCHES
+SELECT DISTINCT
+MG.match_gift_company_id
+From matching_gift mg
+WHERE
+match_alloc_school = 'FS'
+
+UNION
+
+SELECT DISTINCT
+PLG.PLEDGE_DONOR_ID
+From pledge PLG
+WHERE
+pledge_alloc_school = 'FS'
+) THEN 'Y' ELSE 'N' END AS "Feinberg Donor",
+
+
+CASE WHEN E.ID_NUMBER IN (
+----- FEINBERG INTEREST AREA
+select DISTINCT
+ID_NUMBER
+from ADVANCE_NU_RPT.INTEREST_AREA_DETAIL
+WHERE
+INTEREST_AREA = 'Feinberg'
+) THEN 'Y' ELSE 'N' END AS "Feinberg Interest Area"
+
+--EXTRACT(YEAR FROM SYSDATE) - D1.DEGREE_YEAR
+
+FROM FSM_IDS F
+INNER JOIN ENTITY E ON F.ID_NUMBER = E.ID_NUMBER
+LEFT OUTER JOIN DM_ARD.DIM_ENTITY@catrackstobi EN ON E.ID_NUMBER = EN.ID_NUMBER AND EN.CURRENT_INDICATOR = 'Y'
+LEFT OUTER JOIN DM_ARD.FACT_DONOR_SUMMARY@catrackstobi FDS ON E.ID_NUMBER = FDS.ENTITY_KEY AND FDS.ANNUAL_FUND_FLAG = 'N' AND FDS.REPORTING_AREA = 'NA'
+LEFT OUTER JOIN DM_ARD.FACT_DONOR_SUMMARY@catrackstobi FDSF ON E.ID_NUMBER = FDSF.ENTITY_KEY AND FDSF.ANNUAL_FUND_FLAG = 'N' AND FDSF.REPORTING_AREA = 'FS'
 LEFT OUTER JOIN FSM_ADDRESSES ADR ON E.ID_NUMBER = ADR."ID Number" AND ADR.Rw = 1
 LEFT OUTER JOIN FSM_PHONES PH ON E.ID_NUMBER = PH."ID Number" AND PH.Rw = 1
 LEFT OUTER JOIN FSM_EMAILS eM ON E.ID_NUMBER = EM."ID Number" AND EM.Rw = 1
@@ -170,15 +196,13 @@ LEFT OUTER JOIN TMS_RATING RATING ON EV.RATING_CODE = RATING.rating_code
 
 ----- MOST RECENT CONTACT INFO
 LEFT OUTER JOIN FSM_CONTACT_REPORTS CT ON E.ID_NUMBER = CT.ID_NUMBER AND CT.RW = 1
+LEFT OUTER JOIN DM_ARD.DIM_SPECIAL_HANDLING_SUMMARY@catrackstobi SHS ON E.ID_NUMBER = SHS.ID_NUMBER
 
------ QUALIFICATION
-LEFT OUTER JOIN q ON E.ID_NUMBER = q."ID Number" AND q."Qualification Date" >= F."Event Start Date" AND q."Qualification Date" < add_months(F."Event Start Date",12)
+WHERE
+CASE WHEN E.DEATH_DT = '00000000' THEN 'N' ELSE 'Y' END = 'N'
+AND
+CASE WHEN D1.DEGREE_YEAR IS NOT NULL AND D1.DEGREE_YEAR NOT IN (' ') AND EXTRACT(YEAR FROM SYSDATE) - D1.DEGREE_YEAR <= 75 THEN 'Y' ELSE 'N' END = 'Y'
 
------ VISIT
-LEFT OUTER JOIN v ON E.ID_NUMBER = v."ID Number" AND v."Visit Date" >= F."Event Start Date" AND v."Visit Date" < add_months(F."Event Start Date",12)
-
------ SOLICITATION
-LEFT OUTER JOIN s ON E.ID_NUMBER = s."ID Number" AND s."Solicit Date" >= F."Event Start Date" AND s."Solicit Date" < add_months(F."Event Start Date",24)
 
 GROUP BY
 E.ID_NUMBER,
@@ -236,27 +260,10 @@ CT.DESCRIPTION,
 CT.CONTACT_PURPOSE_DESC,
 CT.CONTACTER,
 
-F."Event ID",
-F."Event Name",
-F."Fiscal Year",
-F."Event Venue",
-F."Event State",
-F."Event Note",
-F."Active",
-F."Event Status",
-F."Event Type",
-F."Event Start Date",
-
-F."Attendee Type",
-F."Attendee Status Code",
-F."Attendee Status Desc",
-
-Q."ID Number",
-Q."Qualification Date",
-Q."Qualified By",
-V."ID Number",
-V."Visit Date",
-V."Visited By",
-S."ID Number",
-S."Solicit Date",
-S."Solicited By";
+FDS.LIFETIME_GIFT_CREDIT_AMOUNT,
+FDSF.LIFETIME_GIFT_CREDIT_AMOUNT,
+EN.MAJOR_GIFT_PR_TIER,
+EN.AFFINITY_SCORE,
+NVL(SHS.DO_NOT_SOLICIT_FLAG,'N'),
+NVL(SHS.DO_NOT_MAIL_FLAG,'N'),
+NVL(SHS.DO_NOT_EMAIL_FLAG,'N');
